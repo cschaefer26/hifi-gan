@@ -115,10 +115,14 @@ class Generator(torch.nn.Module):
         for i in range(self.num_upsamples):
             x = F.leaky_relu(x, LRELU_SLOPE)
             x = self.ups[i](x)
-            xs = self.shortcuts[i](x)
+            xs = None
+            xres = self.shortcuts[i](x)
             for j in range(self.num_kernels):
-                xs += self.resblocks[i*self.num_kernels+j](x)
-            x = xs / self.num_kernels
+                if xs is None:
+                    xs = self.resblocks[i*self.num_kernels+j](x)
+                else:
+                    xs += self.resblocks[i*self.num_kernels+j](x)
+            x = xres + xs / self.num_kernels
 
         x = F.leaky_relu(x)
         x = self.conv_post(x)
