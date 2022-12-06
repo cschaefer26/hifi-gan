@@ -233,7 +233,7 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--group_name', default=None)
-    parser.add_argument('--input_wavs_dir', default='/data/datasets/tts-training-data/bild/audios/')
+    parser.add_argument('--input_wavs_dir', default='/data/datasets/bild_final_hifigan/')
     parser.add_argument('--input_mels_dir', default='ft_dataset')
     parser.add_argument('--input_training_file', default='bild_train.txt')
     parser.add_argument('--input_validation_file', default='bild_val.txt')
