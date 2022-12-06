@@ -93,7 +93,8 @@ if __name__ == '__main__':
     print(x.shape)
 
     start = time.time()
-    y = model(x)
+    for i in range(10):
+        y = model(x)
     dur = time.time() - start
 
     print('dur ', dur)

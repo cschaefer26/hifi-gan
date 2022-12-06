@@ -39,19 +39,13 @@ class ResBlock1(torch.nn.Module):
         ])
         self.convs2.apply(init_weights)
 
-        self.shortcuts = nn.ModuleList([
-            weight_norm(nn.Conv1d(channels, channels, kernel_size=1))
-            for _ in range(3)
-        ])
-
     def forward(self, x):
-        for c1, c2, shortcut in zip(self.convs1, self.convs2, self.shortcuts):
-            x_res = shortcut(x)
+        for c1, c2 in zip(self.convs1, self.convs2):
             xt = F.leaky_relu(x, LRELU_SLOPE)
             xt = c1(xt)
             xt = F.leaky_relu(xt, LRELU_SLOPE)
             xt = c2(xt)
-            x = xt + x_res
+            x = xt + x
         return x
 
     def remove_weight_norm(self):
@@ -97,33 +91,35 @@ class Generator(torch.nn.Module):
         resblock = ResBlock1 if h.resblock == '1' else ResBlock2
 
         self.ups = nn.ModuleList()
+        self.shortcuts = nn.ModuleList()
         for i, (u, k) in enumerate(zip(h.upsample_rates, h.upsample_kernel_sizes)):
             self.ups.append(weight_norm(
                 ConvTranspose1d(h.upsample_initial_channel//(2**i), h.upsample_initial_channel//(2**(i+1)),
                                 k, u, padding=(k-u)//2)))
+
 
         self.resblocks = nn.ModuleList()
         for i in range(len(self.ups)):
             ch = h.upsample_initial_channel//(2**(i+1))
             for j, (k, d) in enumerate(zip(h.resblock_kernel_sizes, h.resblock_dilation_sizes)):
                 self.resblocks.append(resblock(h, ch, k, d))
+            self.shortcuts.append(weight_norm(nn.Conv1d(ch, ch, kernel_size=1)))
 
         self.conv_post = weight_norm(Conv1d(ch, 1, 7, 1, padding=3))
         self.ups.apply(init_weights)
         self.conv_post.apply(init_weights)
+
 
     def forward(self, x):
         x = self.conv_pre(x)
         for i in range(self.num_upsamples):
             x = F.leaky_relu(x, LRELU_SLOPE)
             x = self.ups[i](x)
-            xs = None
+            xs = self.shortcuts[i](x)
             for j in range(self.num_kernels):
-                if xs is None:
-                    xs = self.resblocks[i*self.num_kernels+j](x)
-                else:
-                    xs += self.resblocks[i*self.num_kernels+j](x)
+                xs += self.resblocks[i*self.num_kernels+j](x)
             x = xs / self.num_kernels
+
         x = F.leaky_relu(x)
         x = self.conv_post(x)
         x = torch.tanh(x)
@@ -133,6 +129,8 @@ class Generator(torch.nn.Module):
     def remove_weight_norm(self):
         print('Removing weight norm...')
         for l in self.ups:
+            remove_weight_norm(l)
+        for l in self.shortcuts:
             remove_weight_norm(l)
         for l in self.resblocks:
             l.remove_weight_norm()
@@ -309,7 +307,8 @@ if __name__ == '__main__':
     print(x.shape)
 
     start = time.time()
-    y = model(x)
+    for i in range(10):
+        y = model(x)
     dur = time.time() - start
 
     print('dur ', dur)
