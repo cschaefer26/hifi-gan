@@ -42,8 +42,8 @@ def train(rank, a, h):
         print("checkpoints directory : ", a.checkpoint_path)
 
     if os.path.isdir(a.checkpoint_path):
-        cp_g = scan_checkpoint(a.checkpoint_path, 'g_melgan')
-        cp_do = scan_checkpoint(a.checkpoint_path, 'do_melgan')
+        cp_g = scan_checkpoint(a.checkpoint_path, 'g_shortcuts')
+        cp_do = scan_checkpoint(a.checkpoint_path, 'do_shortcuts')
 
     steps = 0
     if cp_g is None or cp_do is None:
@@ -100,7 +100,7 @@ def train(rank, a, h):
                                        pin_memory=True,
                                        drop_last=True)
 
-        sw = SummaryWriter(os.path.join(a.checkpoint_path, 'logs_melgan'))
+        sw = SummaryWriter(os.path.join(a.checkpoint_path, 'logs_shortcuts'))
 
     generator.train()
     mpd.train()
