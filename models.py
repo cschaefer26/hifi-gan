@@ -53,8 +53,6 @@ class ResBlock1(torch.nn.Module):
             remove_weight_norm(l)
         for l in self.convs2:
             remove_weight_norm(l)
-        for l in self.shortcuts:
-            remove_weight_norm(l)
 
 
 class ResBlock2(torch.nn.Module):
