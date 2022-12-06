@@ -88,7 +88,7 @@ class Generator(nn.Module):
 if __name__ == '__main__':
     model = Generator(80)
 
-    x = torch.randn(3, 80, 10)
+    x = torch.randn(3, 80, 1000)
     print(x.shape)
 
     y = model(x)

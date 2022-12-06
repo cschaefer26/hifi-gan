@@ -32,13 +32,19 @@ class ResBlock1(torch.nn.Module):
         ])
         self.convs2.apply(init_weights)
 
+        self.shortcuts = nn.ModuleList([
+            weight_norm(nn.Conv1d(channels, channels, kernel_size=1))
+            for _ in range(3)
+        ])
+
     def forward(self, x):
-        for c1, c2 in zip(self.convs1, self.convs2):
+        for c1, c2, shortcut in zip(self.convs1, self.convs2, self.shortcuts):
+            x_res = shortcut(x)
             xt = F.leaky_relu(x, LRELU_SLOPE)
             xt = c1(xt)
             xt = F.leaky_relu(xt, LRELU_SLOPE)
             xt = c2(xt)
-            x = xt + x
+            x = xt + x_res
         return x
 
     def remove_weight_norm(self):
