@@ -1,9 +1,10 @@
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# from res_stack import ResStack
 from res_stack import ResStack
+#from res_stack import ResStack
 
 MAX_WAV_VALUE = 32768.0
 
@@ -91,9 +92,13 @@ if __name__ == '__main__':
     x = torch.randn(3, 80, 1000)
     print(x.shape)
 
+    start = time.time()
     y = model(x)
+    dur = time.time() - start
+
+    print('dur ', dur)
     print(y.shape)
-    assert y.shape == torch.Size([3, 1, 2560])
+    assert y.shape == torch.Size([3, 1, 256000])
 
     pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(pytorch_total_params)

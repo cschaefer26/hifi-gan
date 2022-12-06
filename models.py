@@ -1,9 +1,12 @@
+import time
+
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
 from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
 from utils import init_weights, get_padding
+from env import AttrDict, build_env
 
 LRELU_SLOPE = 0.1
 
@@ -18,11 +21,15 @@ class ResBlock1(torch.nn.Module):
             weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[1],
                                padding=get_padding(kernel_size, dilation[1]))),
             weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[2],
-                               padding=get_padding(kernel_size, dilation[2])))
+                               padding=get_padding(kernel_size, dilation[2]))),
+            weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[3],
+                               padding=get_padding(kernel_size, dilation[3])))
         ])
         self.convs1.apply(init_weights)
 
         self.convs2 = nn.ModuleList([
+            weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=1,
+                               padding=get_padding(kernel_size, 1))),
             weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=1,
                                padding=get_padding(kernel_size, 1))),
             weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=1,
@@ -289,3 +296,25 @@ def generator_loss(disc_outputs):
 
     return loss, gen_losses
 
+
+if __name__ == '__main__':
+    with open('config_v2.json') as f:
+        data = f.read()
+    import json
+    json_config = json.loads(data)
+    h = AttrDict(json_config)
+    model = Generator(h)
+
+    x = torch.randn(3, 80, 1000)
+    print(x.shape)
+
+    start = time.time()
+    y = model(x)
+    dur = time.time() - start
+
+    print('dur ', dur)
+    print(y.shape)
+    assert y.shape == torch.Size([3, 1, 256000])
+
+    pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(pytorch_total_params)
