@@ -110,7 +110,7 @@ class Generator(torch.nn.Module):
                 else:
                     xs += self.resblocks[dil_index](x)
                 dil_index += 1
-            x = xres + xs / self.num_kernels
+            x = xres + xs / len(self.resblock_dilation_sizes[i])
 
         x = F.leaky_relu(x)
         x = self.conv_post(x)
