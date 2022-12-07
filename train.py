@@ -42,8 +42,8 @@ def train(rank, a, h):
         print("checkpoints directory : ", a.checkpoint_path)
 
     if os.path.isdir(a.checkpoint_path):
-        cp_g = scan_checkpoint(a.checkpoint_path, 'g_shortcuts3')
-        cp_do = scan_checkpoint(a.checkpoint_path, 'do_shortcuts3')
+        cp_g = scan_checkpoint(a.checkpoint_path, 'g_shortcuts_flex')
+        cp_do = scan_checkpoint(a.checkpoint_path, 'do_shortcuts_flex')
 
     steps = 0
     if cp_g is None or cp_do is None:
@@ -100,7 +100,7 @@ def train(rank, a, h):
                                        pin_memory=True,
                                        drop_last=True)
 
-        sw = SummaryWriter(os.path.join(a.checkpoint_path, 'logs_shortcuts3'))
+        sw = SummaryWriter(os.path.join(a.checkpoint_path, 'logs_shortcuts_flex'))
 
     generator.train()
     mpd.train()
@@ -169,10 +169,10 @@ def train(rank, a, h):
 
                 # checkpointing
                 if steps % a.checkpoint_interval == 0 and steps != 0:
-                    checkpoint_path = "{}/g_melgan_{:08d}".format(a.checkpoint_path, steps)
+                    checkpoint_path = "{}/g_flex_{:08d}".format(a.checkpoint_path, steps)
                     save_checkpoint(checkpoint_path,
                                     {'generator': (generator.module if h.num_gpus > 1 else generator).state_dict()})
-                    checkpoint_path = "{}/do_melgan_{:08d}".format(a.checkpoint_path, steps)
+                    checkpoint_path = "{}/do_flex_{:08d}".format(a.checkpoint_path, steps)
                     save_checkpoint(checkpoint_path, 
                                     {'mpd': (mpd.module if h.num_gpus > 1
                                                          else mpd).state_dict(),
@@ -253,7 +253,7 @@ def main():
 
     json_config = json.loads(data)
     h = AttrDict(json_config)
-    build_env(a.config, 'config.json', a.checkpoint_path)
+    build_env(a.config, 'config_flex.json', a.checkpoint_path)
 
     torch.manual_seed(h.seed)
     if torch.cuda.is_available():
