@@ -16,26 +16,14 @@ class ResBlock1(torch.nn.Module):
         super(ResBlock1, self).__init__()
         self.h = h
         self.convs1 = nn.ModuleList([
-            weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[0],
-                               padding=get_padding(kernel_size, dilation[0]))),
-            weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[1],
-                               padding=get_padding(kernel_size, dilation[1]))),
-            weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[2],
-                               padding=get_padding(kernel_size, dilation[2]))),
-            weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[3],
-                               padding=get_padding(kernel_size, dilation[3])))
+            weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[i],
+                               padding=get_padding(kernel_size, dilation[i]))) for i in range(len(dilation))
         ])
         self.convs1.apply(init_weights)
 
         self.convs2 = nn.ModuleList([
             weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=1,
-                               padding=get_padding(kernel_size, 1))),
-            weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=1,
-                               padding=get_padding(kernel_size, 1))),
-            weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=1,
-                               padding=get_padding(kernel_size, 1))),
-            weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=1,
-                               padding=get_padding(kernel_size, 1)))
+                               padding=get_padding(kernel_size, 1))) for _ in range(len(dilation))
         ])
         self.convs2.apply(init_weights)
 
@@ -84,6 +72,7 @@ class Generator(torch.nn.Module):
         super(Generator, self).__init__()
         self.h = h
         self.num_kernels = len(h.resblock_kernel_sizes)
+        self.resblock_dilation_sizes = h.resblock_dilation_sizes
         self.num_upsamples = len(h.upsample_rates)
         self.conv_pre = weight_norm(Conv1d(80, h.upsample_initial_channel, 7, 1, padding=3))
         resblock = ResBlock1 if h.resblock == '1' else ResBlock2
@@ -95,11 +84,10 @@ class Generator(torch.nn.Module):
                 ConvTranspose1d(h.upsample_initial_channel//(2**i), h.upsample_initial_channel//(2**(i+1)),
                                 k, u, padding=(k-u)//2)))
 
-
         self.resblocks = nn.ModuleList()
         for i in range(len(self.ups)):
             ch = h.upsample_initial_channel//(2**(i+1))
-            for j, (k, d) in enumerate(zip(h.resblock_kernel_sizes, h.resblock_dilation_sizes)):
+            for j, (k, d) in enumerate(zip(h.resblock_kernel_sizes, h.resblock_dilation_sizes[i])):
                 self.resblocks.append(resblock(h, ch, k, d))
             self.shortcuts.append(weight_norm(nn.Conv1d(ch, ch, kernel_size=1)))
 
@@ -110,16 +98,18 @@ class Generator(torch.nn.Module):
 
     def forward(self, x):
         x = self.conv_pre(x)
+        dil_index = 0
         for i in range(self.num_upsamples):
             x = F.leaky_relu(x, LRELU_SLOPE)
             x = self.ups[i](x)
             xs = None
             xres = self.shortcuts[i](x)
-            for j in range(self.num_kernels):
+            for j in range(len(self.resblock_dilation_sizes[i])):
                 if xs is None:
-                    xs = self.resblocks[i*self.num_kernels+j](x)
+                    xs = self.resblocks[dil_index](x)
                 else:
-                    xs += self.resblocks[i*self.num_kernels+j](x)
+                    xs += self.resblocks[dil_index](x)
+                dil_index += 1
             x = xres + xs / self.num_kernels
 
         x = F.leaky_relu(x)
@@ -311,9 +301,9 @@ if __name__ == '__main__':
     start = time.time()
     for i in range(10):
         y = model(x)
-    dur = time.time() - start
+        dur = time.time() - start
+        print(i, dur/(i+1))
 
-    print('dur ', dur)
     print(y.shape)
     assert y.shape == torch.Size([3, 1, 256000])
 

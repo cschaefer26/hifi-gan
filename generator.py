@@ -95,9 +95,8 @@ if __name__ == '__main__':
     start = time.time()
     for i in range(10):
         y = model(x)
-    dur = time.time() - start
-
-    print('dur ', dur)
+        dur = time.time() - start
+        print(i, dur/(i+1))
     print(y.shape)
     assert y.shape == torch.Size([3, 1, 256000])
 
