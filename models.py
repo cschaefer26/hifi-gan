@@ -3,7 +3,7 @@ import time
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
+from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d, GRU
 from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
 from utils import init_weights, get_padding
 from env import AttrDict, build_env
@@ -22,8 +22,6 @@ class ResBlock1(torch.nn.Module):
                                padding=get_padding(kernel_size, dilation[1]))),
             weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[2],
                                padding=get_padding(kernel_size, dilation[2]))),
-            weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[3],
-                               padding=get_padding(kernel_size, dilation[3])))
         ])
         self.convs1.apply(init_weights)
 
@@ -34,8 +32,6 @@ class ResBlock1(torch.nn.Module):
                                padding=get_padding(kernel_size, 1))),
             weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=1,
                                padding=get_padding(kernel_size, 1))),
-            weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=1,
-                               padding=get_padding(kernel_size, 1)))
         ])
         self.convs2.apply(init_weights)
 
@@ -85,7 +81,7 @@ class Generator(torch.nn.Module):
         self.h = h
         self.num_kernels = len(h.resblock_kernel_sizes)
         self.num_upsamples = len(h.upsample_rates)
-        self.conv_pre = weight_norm(Conv1d(80, h.upsample_initial_channel, 7, 1, padding=3))
+        self.rnn = GRU(80, h.upsample_initial_channel//2, batch_first=True, bidirectional=True, ) #weight_norm(Conv1d(80, h.upsample_initial_channel, 7, 1, padding=3))
         resblock = ResBlock1 if h.resblock == '1' else ResBlock2
 
         self.ups = nn.ModuleList()
@@ -109,7 +105,8 @@ class Generator(torch.nn.Module):
 
 
     def forward(self, x):
-        x = self.conv_pre(x)
+        x, _ = self.rnn(x.transpose(1, 2))
+        x = x.transpose(1, 2)
         for i in range(self.num_upsamples):
             x = F.leaky_relu(x, LRELU_SLOPE)
             x = self.ups[i](x)
