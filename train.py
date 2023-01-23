@@ -67,6 +67,7 @@ def train(rank, a, h):
         steps_auto = state_dict_do.get['steps_auto'] + 1
         steps = state_dict_do['steps'] + 1
         last_epoch = state_dict_do['epoch']
+        print('restored model with steps: ', steps)
 
     if h.num_gpus > 1:
         generator = DistributedDataParallel(generator, device_ids=[rank]).to(device)
