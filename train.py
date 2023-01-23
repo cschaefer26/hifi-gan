@@ -64,7 +64,7 @@ def train(rank, a, h):
         if 'autoenc' in state_dict_do:
             autoenc.load_state_dict(state_dict_do['autoenc'])
 
-        steps_auto = state_dict_do.get['steps_auto'] + 1
+        steps_auto = state_dict_do.get('steps_auto', 1)
         steps = state_dict_do['steps'] + 1
         last_epoch = state_dict_do['epoch']
         print('restored model with steps: ', steps)
@@ -140,7 +140,7 @@ def train(rank, a, h):
                 optim_a.step()
                 steps_auto += 1
                 print(f'steps auto: {steps_auto}, loss auto: {loss_auto.item()}')
-                sw.add_scalar("training/auto_loss", loss_auto, steps)
+                sw.add_scalar("training/auto_loss", loss_auto, steps_auto)
 
         for i, batch in enumerate(train_loader):
             if rank == 0:
