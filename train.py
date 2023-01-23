@@ -114,7 +114,7 @@ def train(rank, a, h):
                                        pin_memory=True,
                                        drop_last=True)
 
-        sw = SummaryWriter(os.path.join(a.checkpoint_path, 'logs_melgan'))
+        sw = SummaryWriter(os.path.join(a.checkpoint_path, 'logs_auto'))
 
     generator.train()
     mpd.train()
@@ -276,7 +276,7 @@ def main():
     parser.add_argument('--input_mels_dir', default='ft_dataset')
     parser.add_argument('--input_training_file', default='bild_train.txt')
     parser.add_argument('--input_validation_file', default='bild_val.txt')
-    parser.add_argument('--checkpoint_path', default='../cp_hifigan')
+    parser.add_argument('--checkpoint_path', default='cp_hifigan')
     parser.add_argument('--config', default='config_v2.json')
     parser.add_argument('--training_epochs', default=3100, type=int)
     parser.add_argument('--stdout_interval', default=5, type=int)
