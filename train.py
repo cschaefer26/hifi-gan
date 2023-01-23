@@ -30,7 +30,10 @@ def train(rank, a, h):
                            world_size=h.dist_config['world_size'] * h.num_gpus, rank=rank)
 
     torch.cuda.manual_seed(h.seed)
-    device = torch.device('cuda:{:d}'.format(rank))
+    if torch.cuda.is_available():
+        device = torch.device('cuda:{:d}'.format(rank))
+    else:
+        device = torch.device('cpu')
 
     generator = Generator(h).to(device)
     mpd = MultiPeriodDiscriminator().to(device)
@@ -47,6 +50,7 @@ def train(rank, a, h):
         cp_do = scan_checkpoint(a.checkpoint_path, 'do_')
 
     steps = 0
+    steps_auto = 0
     if cp_g is None or cp_do is None:
         state_dict_do = None
         last_epoch = -1
@@ -56,7 +60,11 @@ def train(rank, a, h):
         generator.load_state_dict(state_dict_g['generator'])
         mpd.load_state_dict(state_dict_do['mpd'])
         msd.load_state_dict(state_dict_do['msd'])
-        autoenc.load_state_dict(state_dict_do['autoenc'])
+
+        if 'autoenc' in state_dict_do:
+            autoenc.load_state_dict(state_dict_do['autoenc'])
+
+        steps_auto = state_dict_do.get['steps_auto'] + 1
         steps = state_dict_do['steps'] + 1
         last_epoch = state_dict_do['epoch']
 
@@ -73,7 +81,8 @@ def train(rank, a, h):
     if state_dict_do is not None:
         optim_g.load_state_dict(state_dict_do['optim_g'])
         optim_d.load_state_dict(state_dict_do['optim_d'])
-        optim_a.load_state_dict(state_dict_do['optim_a'])
+        if 'optim_a' in state_dict_do:
+            optim_a.load_state_dict(state_dict_do['optim_a'])
 
     scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=h.lr_decay, last_epoch=last_epoch)
     scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=h.lr_decay, last_epoch=last_epoch)
@@ -109,6 +118,7 @@ def train(rank, a, h):
     generator.train()
     mpd.train()
     msd.train()
+
     for epoch in range(max(0, last_epoch), a.training_epochs):
         if rank == 0:
             start = time.time()
@@ -116,6 +126,20 @@ def train(rank, a, h):
 
         if h.num_gpus > 1:
             train_sampler.set_epoch(epoch)
+
+        while steps_auto < 50000:
+            for i, batch in enumerate(train_loader):
+                x, y, _, y_mel = batch
+                x = torch.autograd.Variable(x.to(device, non_blocking=True))
+                x = x.to(device)
+                x_auto = autoenc(x)
+                loss_auto = F.l1_loss(x_auto, x)
+                optim_a.zero_grad()
+                loss_auto.backward()
+                optim_a.step()
+                steps_auto += 1
+                print(f'steps auto: {steps_auto}, loss auto: {loss_auto.item()}')
+                sw.add_scalar("training/auto_loss", loss_auto, steps)
 
         for i, batch in enumerate(train_loader):
             if rank == 0:
@@ -126,11 +150,6 @@ def train(rank, a, h):
             y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
 
             x_auto = autoenc(x)
-            loss_auto = F.l1_loss(x_auto, x)
-            optim_a.zero_grad()
-            loss_auto.backward()
-            optim_a.step()
-
             x = x_auto.detach()
 
             y = y.unsqueeze(1)
@@ -195,13 +214,14 @@ def train(rank, a, h):
                                      'optim_a': optim_a.state_dict(),
                                      'optim_g': optim_g.state_dict(), 'optim_d': optim_d.state_dict(),
                                      'steps': steps,
+                                     'steps_auto': steps_auto,
                                      'epoch': epoch})
 
                 # Tensorboard summary logging
                 if steps % a.summary_interval == 0:
                     sw.add_scalar("training/gen_loss_total", loss_gen_all, steps)
                     sw.add_scalar("training/mel_spec_error", mel_error, steps)
-                    sw.add_scalar("training/auto_loss", loss_auto, steps)
+
 
                 # Validation
                 if steps % a.validation_interval == 0:  # and steps != 0:
@@ -251,7 +271,7 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--group_name', default=None)
-    parser.add_argument('--input_wavs_dir', default='/Users/cschaefe/datasets/bild_melgan_small ')
+    parser.add_argument('--input_wavs_dir', default='/Users/cschaefe/datasets/bild_melgan_small')
     parser.add_argument('--input_mels_dir', default='ft_dataset')
     parser.add_argument('--input_training_file', default='bild_train.txt')
     parser.add_argument('--input_validation_file', default='bild_val.txt')
@@ -261,7 +281,7 @@ def main():
     parser.add_argument('--stdout_interval', default=5, type=int)
     parser.add_argument('--checkpoint_interval', default=5000, type=int)
     parser.add_argument('--summary_interval', default=100, type=int)
-    parser.add_argument('--validation_interval', default=1000, type=int)
+    parser.add_argument('--validaxtion_interval', default=1000, type=int)
     parser.add_argument('--fine_tuning', default=False, type=bool)
 
     a = parser.parse_args()
