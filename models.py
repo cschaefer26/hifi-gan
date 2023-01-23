@@ -72,6 +72,21 @@ class ResBlock2(torch.nn.Module):
             remove_weight_norm(l)
 
 
+class Autoencoder(torch.nn.Module):
+
+    def __init__(self):
+        super(Autoencoder, self).__init__()
+        self.conv1 = Conv1d(80, 256, 1)
+        self.conv2 = Conv1d(256, 80, 1)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = F.relu(x)
+        x = F.dropout(x, 0.5, training=True)
+        x = self.conv2(x)
+        return x
+
+
 class Generator(torch.nn.Module):
     def __init__(self, h):
         super(Generator, self).__init__()

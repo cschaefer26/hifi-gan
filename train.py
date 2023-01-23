@@ -17,8 +17,8 @@ from torch.distributed import init_process_group
 from torch.nn.parallel import DistributedDataParallel
 from env import AttrDict, build_env
 from meldataset import MelDataset, mel_spectrogram, get_dataset_filelist
-from models import MultiPeriodDiscriminator, MultiScaleDiscriminator, feature_loss, generator_loss,\
-    discriminator_loss
+from models import Generator, MultiPeriodDiscriminator, MultiScaleDiscriminator, feature_loss, generator_loss, \
+    discriminator_loss, Autoencoder
 from utils import plot_spectrogram, scan_checkpoint, load_checkpoint, save_checkpoint
 
 torch.backends.cudnn.benchmark = True
@@ -32,9 +32,10 @@ def train(rank, a, h):
     torch.cuda.manual_seed(h.seed)
     device = torch.device('cuda:{:d}'.format(rank))
 
-    generator = Generator(80).to(device)
+    generator = Generator(h).to(device)
     mpd = MultiPeriodDiscriminator().to(device)
     msd = MultiScaleDiscriminator().to(device)
+    autoenc = Autoencoder().to(device)
 
     if rank == 0:
         print(generator)
@@ -55,6 +56,7 @@ def train(rank, a, h):
         generator.load_state_dict(state_dict_g['generator'])
         mpd.load_state_dict(state_dict_do['mpd'])
         msd.load_state_dict(state_dict_do['msd'])
+        autoenc.load_state_dict(state_dict_do['autoenc'])
         steps = state_dict_do['steps'] + 1
         last_epoch = state_dict_do['epoch']
 
@@ -66,10 +68,12 @@ def train(rank, a, h):
     optim_g = torch.optim.AdamW(generator.parameters(), h.learning_rate, betas=[h.adam_b1, h.adam_b2])
     optim_d = torch.optim.AdamW(itertools.chain(msd.parameters(), mpd.parameters()),
                                 h.learning_rate, betas=[h.adam_b1, h.adam_b2])
+    optim_a = torch.optim.AdamW(autoenc.parameters(), h.learning_rate, betas=[h.adam_b1, h.adam_b2])
 
     if state_dict_do is not None:
         optim_g.load_state_dict(state_dict_do['optim_g'])
         optim_d.load_state_dict(state_dict_do['optim_d'])
+        optim_a.load_state_dict(state_dict_do['optim_a'])
 
     scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=h.lr_decay, last_epoch=last_epoch)
     scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=h.lr_decay, last_epoch=last_epoch)
@@ -120,6 +124,15 @@ def train(rank, a, h):
             x = torch.autograd.Variable(x.to(device, non_blocking=True))
             y = torch.autograd.Variable(y.to(device, non_blocking=True))
             y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
+
+            x_auto = autoenc(x)
+            loss_auto = F.l1_loss(x_auto, x)
+            optim_a.zero_grad()
+            loss_auto.backward()
+            optim_a.step()
+
+            x = x_auto.detach()
+
             y = y.unsqueeze(1)
 
             y_g_hat = generator(x)
@@ -178,13 +191,17 @@ def train(rank, a, h):
                                                          else mpd).state_dict(),
                                      'msd': (msd.module if h.num_gpus > 1
                                                          else msd).state_dict(),
-                                     'optim_g': optim_g.state_dict(), 'optim_d': optim_d.state_dict(), 'steps': steps,
+                                     'auto': autoenc.state_dict(),
+                                     'optim_a': optim_a.state_dict(),
+                                     'optim_g': optim_g.state_dict(), 'optim_d': optim_d.state_dict(),
+                                     'steps': steps,
                                      'epoch': epoch})
 
                 # Tensorboard summary logging
                 if steps % a.summary_interval == 0:
                     sw.add_scalar("training/gen_loss_total", loss_gen_all, steps)
                     sw.add_scalar("training/mel_spec_error", mel_error, steps)
+                    sw.add_scalar("training/auto_loss", loss_auto, steps)
 
                 # Validation
                 if steps % a.validation_interval == 0:  # and steps != 0:
