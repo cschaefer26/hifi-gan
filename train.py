@@ -128,7 +128,7 @@ def train(rank, a, h):
         if h.num_gpus > 1:
             train_sampler.set_epoch(epoch)
 
-        while steps_auto < 50000:
+        while steps_auto < 3000:
             for i, batch in enumerate(train_loader):
                 x, y, _, y_mel = batch
                 x = torch.autograd.Variable(x.to(device, non_blocking=True))
@@ -232,7 +232,7 @@ def train(rank, a, h):
                     with torch.no_grad():
                         for j, batch in enumerate(validation_loader):
                             x, y, _, y_mel = batch
-                            x = autoenc(x)
+                            x = autoenc(x.to(device))
                             y_g_hat = generator(x.to(device))
                             y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
                             y_g_hat_mel = mel_spectrogram(y_g_hat.squeeze(1), h.n_fft, h.num_mels, h.sampling_rate,
@@ -282,7 +282,7 @@ def main():
     parser.add_argument('--stdout_interval', default=5, type=int)
     parser.add_argument('--checkpoint_interval', default=5000, type=int)
     parser.add_argument('--summary_interval', default=100, type=int)
-    parser.add_argument('--validaxtion_interval', default=1000, type=int)
+    parser.add_argument('--validation_interval', default=1000, type=int)
     parser.add_argument('--fine_tuning', default=False, type=bool)
 
     a = parser.parse_args()

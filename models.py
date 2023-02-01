@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
+from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d, Linear, GRU
 from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
 from utils import init_weights, get_padding
 
@@ -76,14 +76,13 @@ class Autoencoder(torch.nn.Module):
 
     def __init__(self):
         super(Autoencoder, self).__init__()
-        self.conv1 = Conv1d(80, 256, 1)
-        self.conv2 = Conv1d(256, 80, 1)
+        self.rnn = GRU(80, 64, bidirectional=True)
+        self.lin = Linear(128, 80)
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = F.dropout(x, 0.5, training=True)
-        x = self.conv2(x)
+        x, _ = self.rnn(x.transpose(1, 2))
+        x = self.lin(x)
+        x = x.transpose(1, 2)
         return x
 
 
