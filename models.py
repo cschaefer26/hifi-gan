@@ -81,6 +81,7 @@ class Autoencoder(torch.nn.Module):
 
     def forward(self, x):
         x, _ = self.rnn(x.transpose(1, 2))
+        x = F.dropout(x, p=0.1, training=True)
         x = self.lin(x)
         x = x.transpose(1, 2)
         return x
